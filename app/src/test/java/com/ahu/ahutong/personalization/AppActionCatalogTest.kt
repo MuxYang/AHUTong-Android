@@ -61,7 +61,7 @@ class AppActionCatalogTest {
             repositoryRoot,
             "app/src/main/java/com/ahu/ahutong/ui/screen/Main.kt"
         ).readText()
-        val literalRoutes = Regex("animatedComposable\\(\\\"([^\\\"]+)\\\"")
+        val literalRoutes = Regex("animatedComposable\\((?:appUiTheme,\\s*)?\\\"([^\\\"]+)\\\"")
             .findAll(mainSource)
             .map { it.groupValues[1] }
             .filterNot { it == "debug" }
