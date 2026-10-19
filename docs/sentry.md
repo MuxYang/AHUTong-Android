@@ -75,9 +75,12 @@ sentry-cli debug-files upload --org openahu --project ahutong-android \
 ## 运行时行为
 
 - `AndroidManifest.xml` 中关闭了 `io.sentry.auto-init`，SDK 在 `AHUApplication#onCreate` 中手动初始化。
-- Debug 包上报到 `debug` 环境，Release 包上报到 `release`；性能采样率分别为 `1.0` 与 `0.1`。
-- 主界面每次回到前台时按本地日期检查；每天首次恢复时发送一条 `AHUTong DAU` 消息，携带 `dau_id` tag。可在 Discover 过滤该消息并用 `count_unique(tags[dau_id])` 按日统计。
+- Debug 包上报到 `debug` 环境，Release 包上报到 `release`；普通性能采样率分别为 `1.0` 与 `0.1`。
+- 主界面恢复前台时在 IO 线程按本地日期检查；每天首次恢复发送独立的 `AHUTong DAU` 根 span（`span.op=app.dau`），不再发送 message/error。该 span 显式使用 `1.0` 采样且不绑定当前 scope，避免受页面的采样决定影响，也不覆盖页面 trace。
+- 在 Explore → Spans 过滤 `span.op:app.dau environment:release`，使用 `count_unique(dau_id)` 并按天分桶。span 同时带有 `dau_id` tag/attribute 和设备本地日期 `dau_date`；选择统计时区时留意设备本地日与图表日期的差异。
+- 使用独立的 `dau_last_span_report_date` 去重键：升级当天旧 message 不会阻止新 span，旧安装 ID 保持不变。同一天的重复/并发恢复仅发一次；SDK 禁用时不消耗当日上报机会。
 - `dau_id` 是本地保存的随机安装标识，不含账号信息。同一安装跨天保持不变；清除应用数据后会重新生成。此统计按安装去重，同一人使用多个安装会被分别计数。
+- 新路径随客户端升级生效，旧版本仍上报旧 message。客户端的全量采样不保证服务端接收：网络、配额与服务端采样仍可能影响完整性，不能将本地去重标记视为服务端确认。
 
 ## 验证方式
 
@@ -90,6 +93,8 @@ sentry-cli debug-files upload --org openahu --project ahutong-android \
 - [ProGuard / R8](https://docs.sentry.io/platforms/android/enhance-errors/proguard/)
 - [CLI 符号文件与 mapping](https://docs.sentry.io/cli/dif/)
 - [权限与 scope](https://docs.sentry.io/api/permissions/)
+- [自定义 tracing](https://docs.sentry.io/platforms/android/tracing/instrumentation/custom-instrumentation/)
+- [SDK 8.55.0 的显式采样决定](https://github.com/getsentry/sentry-java/blob/8.55.0/sentry/src/main/java/io/sentry/TransactionContext.java)
 
 ## Native 崩溃线程信息
 
