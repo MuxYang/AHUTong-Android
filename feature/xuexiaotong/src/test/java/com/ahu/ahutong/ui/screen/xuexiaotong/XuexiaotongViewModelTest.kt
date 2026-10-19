@@ -45,6 +45,16 @@ class XuexiaotongViewModelTest {
     }
 
     @Test
+    fun `an early toggle applies after the saved setting is restored`() = runTest(dispatcher) {
+        val store = FakeChaoxingStore(showDone = true)
+        val subject = XuexiaotongViewModel(FakeChaoxingSession(), store, FakeChaoxingReminders(), dispatcher)
+        subject.toggleShowDone()
+        advanceUntilIdle()
+        assertFalse(subject.showDone.value)
+        assertFalse(store.showDone)
+    }
+
+    @Test
     fun `refresh state reads every field from the store`() = runTest(dispatcher) {
         val store = FakeChaoxingStore(
             works = listOf(Work(title = "作业一")),

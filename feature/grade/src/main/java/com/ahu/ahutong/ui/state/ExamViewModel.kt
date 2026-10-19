@@ -95,6 +95,8 @@ class ExamViewModel @Inject constructor(
 
         refreshJob = viewModelScope.launchSafe {
             val user = withContext(ioDispatcher) { session.currentUser() }
+            val owner = Triple(user?.xh, session.isLoggedIn(), exams.usesMockData())
+            fun ownerIsCurrent() = owner == Triple(session.currentUser()?.xh, session.isLoggedIn(), exams.usesMockData())
             if (user == null && !exams.usesMockData()) {
                 data.value = AhuResult.Failure(AhuError.Unauthorized("账户未登录"))
                 errorMessage.value = "账户未登录"
@@ -105,6 +107,7 @@ class ExamViewModel @Inject constructor(
             val (cached, cachedAt) = withContext(ioDispatcher) {
                 exams.cachedExams() to exams.cachedAt()
             }
+            if (!ownerIsCurrent()) return@launchSafe
             val hasCachedSnapshot = cachedAt > 0L
             if (!isRefresh && (cached.isNotEmpty() || hasCachedSnapshot)) {
                 data.value = AhuResult.Success(cached)
@@ -132,6 +135,11 @@ class ExamViewModel @Inject constructor(
                 studentId = user?.xh ?: "mock-student",
                 studentName = user?.name ?: "Mock 用户"
             )
+            if (!ownerIsCurrent()) {
+                isLoading.value = false
+                _refreshState.value = RefreshState.IDLE
+                return@launchSafe
+            }
 
             if (result.isSuccess) {
                     val newExams = result.valueOrNull().orEmpty()
