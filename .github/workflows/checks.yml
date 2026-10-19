@@ -72,9 +72,9 @@ jobs:
             base="$PUSH_BEFORE"
           fi
           if [[ -n "$base" ]]; then
-            git diff --check "$base" HEAD
+            git -c core.whitespace=cr-at-eol diff --check "$base" HEAD
           else
-            git show --format= --check HEAD
+            git -c core.whitespace=cr-at-eol show --format= --check HEAD
           fi
           python3 - <<'PY'
           import pathlib, re, subprocess

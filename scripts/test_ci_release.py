@@ -51,6 +51,15 @@ class PlanningTest(unittest.TestCase):
                 self.assertIs(plan["force"], False)
                 self.assertEqual({"version_code", "version_name", "channel", "changelog", "force"}, set(plan))
 
+    def test_current_server_debug_preview_migrates_to_beta(self):
+        # Public channel metadata checked on 2026-10-19; keep CI offline.
+        state = {"stable": release("3.4.2", 304003), "preview": release("3.4.3-debug2", 304005)}
+        for change, expected in (("test", "3.4.3-beta3"), ("patch", "3.4.3")):
+            with self.subTest(change=change):
+                plan = ci_release.plan_release(state, gradle(), change, "修复问题", False)
+                self.assertEqual(expected, plan["version_name"])
+                self.assertEqual(304006, plan["version_code"])
+
     def test_changelog_actual_and_literal_newlines(self):
         for text in ("第一项\n第二项", r"第一项\n第二项", "第一项\r\n第二项"):
             with self.subTest(text=text):
@@ -78,7 +87,7 @@ class PlanningTest(unittest.TestCase):
         for state in ([], {"stable": {}}, {"stable": 4}, {"stable": release("3.4.3-release-beta1", 304004)}, {"stable": release("3.4.3-beta1", 304004)}, {"preview": release("3.4", 304004)}):
             with self.subTest(state=state), self.assertRaises(ValueError):
                 ci_release.plan_release(state, gradle(), "patch", "ok", False)
-        for name in ("3.4", "03.4.2", "3.4.2-release-beta0", "3.4.2-beta0", "3.4.2-debug"):
+        for name in ("3.4", "03.4.2", "3.4.2-release-beta0", "3.4.2-beta0", "3.4.2-debug", "3.4.2-debug0"):
             with self.subTest(name=name), self.assertRaises(ValueError):
                 ci_release.plan_release({}, gradle(name), "patch", "ok", False)
         with self.assertRaises(ValueError):
@@ -116,11 +125,13 @@ class MetadataTest(unittest.TestCase):
             apk = root / "build.apk"
             apk.write_bytes(b"synthetic APK")
             plan = ci_release.plan_release({}, gradle(), "test", "ok", False)
-            plan["version_name"] = "3.4.3-release-beta7"
-            with self.assertRaisesRegex(ValueError, "[Rr]eplan.*rebuild"):
-                ci_release.write_metadata(plan, apk, root / "out")
-            self.assertFalse((root / "out").exists())
-            self.assertEqual("3.4.3-release-beta7", plan["version_name"])
+            for legacy in ("3.4.3-release-beta7", "3.4.3-debug2"):
+                with self.subTest(legacy=legacy):
+                    plan["version_name"] = legacy
+                    with self.assertRaisesRegex(ValueError, "[Rr]eplan.*rebuild"):
+                        ci_release.write_metadata(plan, apk, root / "out")
+                    self.assertFalse((root / "out").exists())
+                    self.assertEqual(legacy, plan["version_name"])
 
     def test_rejects_empty_apk_and_invalid_plan_before_creating_output(self):
         with tempfile.TemporaryDirectory() as folder:

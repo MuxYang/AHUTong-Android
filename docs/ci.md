@@ -28,6 +28,8 @@
 
 test 发布到 `/www/openahu.org/update/static/preview/`，其他三种发布到 `/www/openahu.org/update/static/`。两渠道均构建 Release，包名 `com.ahu.ahutong`、生产签名一致，以支持互相覆盖安装。不会用 `.debug` 包作为 preview，也不更改独立 SO 下载端点的 `libahutong_rs.so` / `so_version.txt`。
 
+历史服务器版本名 `X.Y.Z-debugN`、`X.Y.Z-release-betaN` 只作为规划输入，延续其测试序号；新计划一律输出 `X.Y.Z-betaN`。旧命名的计划不能直接改写元数据，须重新规划和构建，保证 APK 内嵌版本一致。2026-10-19 只读核对线上正式版为 `3.4.2/304003`、preview 为 `3.4.3-debug2/304005`；在这份状态下，test 规划为 `3.4.3-beta3/304006`，patch 为 `3.4.3/304006`。实际发布仍以构建前 SSH 读取的最新状态为准。
+
 ## 需要配置的 Secrets
 
 仓库 Settings → Secrets and variables → Actions → Repository secrets。不要把值写进 YAML、Git、更新说明或日志。
