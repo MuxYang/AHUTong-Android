@@ -307,7 +307,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        (application as AHUApplication).reportDauIfNeeded()
+        lifecycleScope.launch(Dispatchers.IO) {
+            (application as AHUApplication).reportDauIfNeeded()
+        }
         // 回到前台立即对一次日期：后台挂过午夜的用户回来的第一眼就该是新的一天。
         checkDayRollover()
     }

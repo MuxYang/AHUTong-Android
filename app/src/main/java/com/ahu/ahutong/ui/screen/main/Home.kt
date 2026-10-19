@@ -128,14 +128,15 @@ fun Home(
     navController: NavHostController,
     behaviorRuntime: BehaviorPredictionRuntime,
     isActive: Boolean,
+    undergraduateEnabled: Boolean,
+    accountId: String?,
     onOpenSchedule: () -> Unit = { navController.navigate("schedule") },
     homeEditEnabled: Boolean = false,
     enterEditModeRequest: Boolean = false,
     onEnterEditModeRequestConsumed: () -> Unit = {}
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
-    val undergraduateEnabled = AHUCache.canUseUndergraduateAcademics()
-    val noticeAccountId = com.ahu.ahutong.data.session.SessionStore.currentUser()?.xh
+    val noticeAccountId = accountId
     val noticeSnapshot by CampusNoticeRepository.snapshot.collectAsState()
     val noticeUnreadCount = noticeSnapshot?.takeIf { it.accountId == noticeAccountId }?.unreadCount ?: 0
     LaunchedEffect(isActive, noticeAccountId) {
@@ -146,7 +147,7 @@ fun Home(
             CampusNoticeRepository.requestSyncIfDue()
         }
     }
-    val graduateAccountId = if (undergraduateEnabled) null else AHUCache.getCurrentUser()?.xh
+    val graduateAccountId = if (undergraduateEnabled) null else accountId
     val graduateRepository = remember { PostgraduateScheduleRepository.instance }
     val graduateCacheRevision by graduateRepository.revision.collectAsState()
     val graduateWeekRevision by AHUCache.postgraduateWeekUpdates().collectAsState()
@@ -222,7 +223,7 @@ fun Home(
     val currentWeek = effectiveScheduleConfig?.week ?: 1
     val currentWeekday = effectiveScheduleConfig?.weekDay ?: 1
     val mockRefreshRevision by MockScenarioController.refreshRevisions().collectAsState()
-    val todayCourses = remember(schedule, isInSemester, currentWeek, currentWeekday) {
+    val todayCourses = remember(schedule, isInSemester, currentWeek, currentWeekday, undergraduateEnabled) {
         if (isInSemester) {
             if (!undergraduateEnabled && effectiveScheduleConfig != null) {
                 GraduateTodayCoursePolicy.filter(
@@ -248,8 +249,12 @@ fun Home(
     // 主页排版全主题统一为 Radiant 方案（曜光居中 Hero 布局），主题只换材质皮肤
     val layoutFamily = HomeWidgetLayoutFamily.RADIANT
     val slotCount = HomeWidgetRegistry.slotCountRadiant
-    val knownWidgetIds = remember(noticeAccountId, undergraduateEnabled) {
-        HomeWidgetRegistry.availableWidgets(true).mapTo(mutableSetOf()) { it.id }
+    val plugins by com.ahu.ahutong.ui.plugin.PluginRegistry.plugins.collectAsState()
+    val homeWidgets = remember(plugins, undergraduateEnabled) {
+        HomeWidgetRegistry.availableWidgets(true, undergraduateEnabled)
+    }
+    val knownWidgetIds = remember(homeWidgets) {
+        homeWidgets.mapTo(mutableSetOf()) { it.id }
     }
     val initialCalendar = remember { Calendar.getInstance(Locale.CHINA) }
     var currentDateText by remember { mutableStateOf("") }
@@ -263,7 +268,7 @@ fun Home(
         mutableStateOf(normalizeHomeWidgetSlots(HomeWidgetPlacement.currentSlots(), slotCount, knownWidgetIds))
     }
     val homeWidgetRevision by HomeWidgetPlacement.revision.collectAsState()
-    LaunchedEffect(homeWidgetRevision, noticeAccountId) {
+    LaunchedEffect(homeWidgetRevision, noticeAccountId, knownWidgetIds) {
         homeWidgetSlots = normalizeHomeWidgetSlots(HomeWidgetPlacement.currentSlots(), slotCount, knownWidgetIds)
     }
     val slotBounds = remember { mutableStateMapOf<Int, Rect>() }
@@ -627,9 +632,10 @@ fun Home(
             }
         }
 
-        val placedWidgetIds = homeWidgetSlots.filterNotNull().toSet()
-        val availableWidgets = HomeWidgetRegistry.availableWidgets(true)
-            .filter { it.id !in placedWidgetIds }
+        val availableWidgets = remember(homeWidgets, homeWidgetSlots) {
+            val placedWidgetIds = homeWidgetSlots.filterNotNull().toSet()
+            homeWidgets.filter { it.id !in placedWidgetIds }
+        }
         val isDraggingFromLibrary = activeDrag != null && activeDrag?.sourceSlot == null
         HomeWidgetLibrarySheet(
             visible = isEditingHome,

@@ -370,6 +370,8 @@ fun Main(
                     navController = navController,
                     behaviorRuntime = behaviorRuntime,
                     isActive = isHomeActive,
+                    undergraduateEnabled = undergraduateEnabled,
+                    accountId = SessionStore.currentUser()?.xh,
                     onOpenSchedule = {
                         scope.launch { selectPrimaryDestination("schedule") }
                     },
