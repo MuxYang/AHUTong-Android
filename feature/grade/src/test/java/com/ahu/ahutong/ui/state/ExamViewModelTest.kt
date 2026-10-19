@@ -54,7 +54,7 @@ class ExamViewModelTest {
         source: FakeExamSource = FakeExamSource(),
         session: FakeGradeSession = FakeGradeSession(),
         behavior: FakeGradeBehavior = FakeGradeBehavior()
-    ) = ExamViewModel(source, session, behavior)
+    ) = ExamViewModel(source, session, behavior, dispatcher)
 
     @Test
     fun `a fresh cache is served without touching the network`() = runTest(dispatcher) {

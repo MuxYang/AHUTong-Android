@@ -1,6 +1,9 @@
 package com.ahu.ahutong.ui.screen.main
 
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.foundation.background
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -61,6 +64,7 @@ import com.ahu.ahutong.data.dao.AHUCache
 import com.ahu.ahutong.data.notice.CampusNoticeRepository
 import com.ahu.ahutong.data.schedule.gmis.GmisTimetableAdapter
 import com.ahu.ahutong.data.crawler.gmis.PostgraduateScheduleRepository
+import com.ahu.ahutong.data.crawler.gmis.GmisScheduleSnapshot
 import com.ahu.ahutong.data.schedule.PostgraduateTeachingWeek
 import com.ahu.ahutong.data.schedule.GraduateTodayCoursePolicy
 import java.time.ZoneId
@@ -129,6 +133,7 @@ fun Home(
     enterEditModeRequest: Boolean = false,
     onEnterEditModeRequestConsumed: () -> Unit = {}
 ) {
+    val lifecycleOwner = LocalLifecycleOwner.current
     val undergraduateEnabled = AHUCache.canUseUndergraduateAcademics()
     val noticeAccountId = com.ahu.ahutong.data.session.SessionStore.currentUser()?.xh
     val noticeSnapshot by CampusNoticeRepository.snapshot.collectAsState()
@@ -145,11 +150,16 @@ fun Home(
     val graduateRepository = remember { PostgraduateScheduleRepository.instance }
     val graduateCacheRevision by graduateRepository.revision.collectAsState()
     val graduateWeekRevision by AHUCache.postgraduateWeekUpdates().collectAsState()
-    val graduateSnapshot = remember(graduateAccountId, graduateCacheRevision) {
-        graduateAccountId?.let(graduateRepository::cachedCurrent)
+    val loadedGraduateCache by produceState<Pair<String?, GmisScheduleSnapshot?>?>(null, graduateAccountId, graduateCacheRevision) {
+        value = graduateAccountId to withContext(Dispatchers.IO) {
+            graduateAccountId?.let(graduateRepository::cachedCurrent)
+        }
     }
-    LaunchedEffect(graduateAccountId, graduateSnapshot == null) {
+    val graduateCacheReady = loadedGraduateCache != null && loadedGraduateCache?.first == graduateAccountId
+    val graduateSnapshot = loadedGraduateCache?.takeIf { it.first == graduateAccountId }?.second
+    LaunchedEffect(graduateAccountId, graduateCacheReady, graduateSnapshot == null) {
         val account = graduateAccountId ?: return@LaunchedEffect
+        if (!graduateCacheReady) return@LaunchedEffect
         if (graduateSnapshot == null) {
             try {
                 withContext(Dispatchers.IO) { graduateRepository.current(account) }
@@ -188,11 +198,13 @@ fun Home(
     val scheduleConfig by scheduleViewModel.scheduleConfig.observeAsState()
     val holidays by scheduleViewModel.scheduleHolidays.observeAsState(emptyMap())
     var today by remember { mutableStateOf(DebugClock.nowLocalDate()) }
-    LaunchedEffect(isActive, today) {
+    LaunchedEffect(isActive, today, lifecycleOwner) {
         if (isActive) {
-            while (true) {
-                scheduleViewModel.loadHolidaysForDates(setOf(today, today.plusDays(1)))
-                delay(5 * 60_000L)
+            lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (true) {
+                    scheduleViewModel.loadHolidaysForDates(setOf(today, today.plusDays(1)))
+                    delay(5 * 60_000L)
+                }
             }
         }
     }
@@ -270,9 +282,10 @@ fun Home(
     }
     val weatherHomeConfig by produceState(
         initialValue = WeatherHomeConfig(),
-        key1 = Unit
+        key1 = noticeAccountId,
+        key2 = isActive
     ) {
-        value = withContext(Dispatchers.IO) { WeatherHomeConfig.fromCache() }
+        value = if (isActive) withContext(Dispatchers.IO) { WeatherHomeConfig.fromCache() } else WeatherHomeConfig()
     }
 
     fun saveHomeWidgetSlots(slots: List<String?>) {
@@ -416,8 +429,10 @@ fun Home(
             scheduleViewModel.refreshSchedule(isRefresh = true)
         }
     }
-    LaunchedEffect(Unit) {
-        while (true) {
+    LaunchedEffect(isActive, lifecycleOwner) {
+        if (!isActive) return@LaunchedEffect
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+          while (true) {
             val now = withContext(Dispatchers.IO) { DebugClock.nowDate() }
             today = now.toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate()
             val calendar = Calendar.getInstance(Locale.CHINA).apply { time = now }
@@ -428,6 +443,7 @@ fun Home(
             graduateToday = DebugClock.nowLocalDate()
             delay(HOME_REFRESH_INTERVAL_MS)
             discoveryViewModel.refreshCardBalance()
+          }
         }
     }
     DisposableEffect(Unit) {
