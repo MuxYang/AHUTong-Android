@@ -740,11 +740,12 @@ private fun Modifier.dashedBorder(color: Color): Modifier {
 @Composable
 private fun EditorWidgetIcon(iconId: Int, iconBytes: ByteArray?, tint: Color, size: androidx.compose.ui.unit.Dp) {
     if (iconBytes != null) {
-        val bitmap by produceState<ImageBitmap?>(null, iconBytes) {
+        val decodedBitmap by produceState<ImageBitmap?>(null, iconBytes) {
             value = withContext(Dispatchers.Default) {
                 android.graphics.BitmapFactory.decodeByteArray(iconBytes, 0, iconBytes.size)?.asImageBitmap()
             }
         }
+        val bitmap = decodedBitmap
         if (bitmap != null) {
             androidx.compose.foundation.Image(
                 bitmap = bitmap,

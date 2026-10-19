@@ -60,8 +60,10 @@ class XuexiaotongViewModelTest {
             showEmptyCourses = true
         )
         val subject = XuexiaotongViewModel(FakeChaoxingSession(), store, FakeChaoxingReminders(), dispatcher)
+        advanceUntilIdle()
 
         subject.refreshState()
+        advanceUntilIdle()
 
         assertTrue(subject.loggedIn.value)
         assertEquals(listOf(Work(title = "作业一")), subject.works.value)
@@ -80,6 +82,7 @@ class XuexiaotongViewModelTest {
     fun `toggles are persisted through the store`() = runTest(dispatcher) {
         val store = FakeChaoxingStore()
         val subject = XuexiaotongViewModel(FakeChaoxingSession(), store, FakeChaoxingReminders(), dispatcher)
+        advanceUntilIdle()
 
         subject.toggleShowDone()
         subject.toggleDoneGray()
@@ -98,6 +101,7 @@ class XuexiaotongViewModelTest {
         val store = FakeChaoxingStore()
         val reminders = FakeChaoxingReminders()
         val subject = XuexiaotongViewModel(FakeChaoxingSession(), store, reminders, dispatcher)
+        advanceUntilIdle()
 
         subject.saveRemind(RemindSetting(enabled = true, leadMinutes = 15, onlyTodo = false))
 
@@ -114,7 +118,9 @@ class XuexiaotongViewModelTest {
         )
         val reminders = FakeChaoxingReminders()
         val subject = XuexiaotongViewModel(session, store, reminders, dispatcher)
+        advanceUntilIdle()
         subject.refreshState()
+        advanceUntilIdle()
 
         subject.logout()
 
@@ -133,7 +139,9 @@ class XuexiaotongViewModelTest {
         val store = FakeChaoxingStore(courses = listOf(Course(courseId = "c1", name = "高等数学")))
         val reminders = FakeChaoxingReminders()
         val subject = XuexiaotongViewModel(session, store, reminders, dispatcher)
+        advanceUntilIdle()
         subject.refreshState()
+        advanceUntilIdle()
 
         subject.syncWorks()
         advanceUntilIdle()
@@ -151,7 +159,9 @@ class XuexiaotongViewModelTest {
         val session = FakeChaoxingSession(syncFailure = IllegalStateException("网络连接失败"))
         val reminders = FakeChaoxingReminders()
         val subject = XuexiaotongViewModel(session, FakeChaoxingStore(), reminders, dispatcher)
+        advanceUntilIdle()
         subject.refreshState()
+        advanceUntilIdle()
 
         subject.syncWorks()
         advanceUntilIdle()
@@ -166,7 +176,9 @@ class XuexiaotongViewModelTest {
     fun `a sync without a session does nothing`() = runTest(dispatcher) {
         val session = FakeChaoxingSession(hasSession = false)
         val subject = XuexiaotongViewModel(session, FakeChaoxingStore(), FakeChaoxingReminders(), dispatcher)
+        advanceUntilIdle()
         subject.refreshState()
+        advanceUntilIdle()
 
         subject.syncWorks()
         advanceUntilIdle()
@@ -180,6 +192,7 @@ class XuexiaotongViewModelTest {
         val store = FakeChaoxingStore()
         val reminders = FakeChaoxingReminders()
         val subject = XuexiaotongViewModel(FakeChaoxingSession(), store, reminders, dispatcher)
+        advanceUntilIdle()
 
         subject.addCustomEvent(CustomEvent(id = "e1", title = "考试"))
         subject.toggleCustomEventDone("e1")
@@ -193,6 +206,7 @@ class XuexiaotongViewModelTest {
     fun `login goes through the session port`() = runTest(dispatcher) {
         val session = FakeChaoxingSession()
         val subject = XuexiaotongViewModel(session, FakeChaoxingStore(), FakeChaoxingReminders(), dispatcher)
+        advanceUntilIdle()
 
         subject.login("13800000000", "secret")
 
@@ -206,6 +220,7 @@ class XuexiaotongViewModelTest {
             loginFailure = IllegalStateException("账号或密码错误")
         )
         val subject = XuexiaotongViewModel(session, FakeChaoxingStore(), FakeChaoxingReminders(), dispatcher)
+        advanceUntilIdle()
 
         val error = assertFailsWith<IllegalStateException> {
             subject.login("13800000000", "wrong")

@@ -61,7 +61,7 @@ public class AHUApplication extends Application implements ImageLoaderFactory {
         AppEnvironmentHolder.INSTANCE.install(new AndroidAppEnvironment(this));
 
         // 插件注册表兜底初始化（不依赖页面组合时序；进程内幂等）
-        com.ahu.ahutong.ui.plugin.PluginRegistry.INSTANCE.init(this);
+        com.ahu.ahutong.ui.plugin.PluginRegistry.INSTANCE.initAsync(this);
         DebugTimeSourceHolder.INSTANCE.install(CacheDebugTimeSource.INSTANCE);
         UserNoticeHolder.INSTANCE.install(ToastUserNotice.INSTANCE);
 

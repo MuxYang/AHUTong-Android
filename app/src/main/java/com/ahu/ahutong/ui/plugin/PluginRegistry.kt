@@ -8,6 +8,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -25,6 +28,13 @@ object PluginRegistry {
 
     private var initialized = false
     private val reloadMutex = Mutex()
+    private val initializationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /** Application's Java entry point; discovery must not delay the first frame. */
+    fun initAsync(context: Context) {
+        val application = context.applicationContext
+        initializationScope.launch { init(application) }
+    }
 
     /** 进程内初始化一次（Main 启动时调用）。 */
     suspend fun init(context: Context) = withContext(Dispatchers.IO) {
