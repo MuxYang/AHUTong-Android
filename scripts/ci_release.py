@@ -9,13 +9,13 @@ import re
 import shutil
 
 ANDROID_MAX_VERSION_CODE = 2_100_000_000
-_VERSION = re.compile(r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:release-)?beta([1-9]\d*))?")
+_VERSION = re.compile(r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(?:(?:release-)?beta|debug)([1-9]\d*))?")
 
 
 def _version(name):
     match = _VERSION.fullmatch(name) if isinstance(name, str) else None
     if match is None:
-        raise ValueError(f"Invalid version name: {name!r}; expected X.Y.Z or X.Y.Z-betaN (legacy X.Y.Z-release-betaN is also accepted)")
+        raise ValueError(f"Invalid version name: {name!r}; expected X.Y.Z or X.Y.Z-betaN (legacy X.Y.Z-release-betaN/debugN are accepted for planning)")
     return tuple(map(int, match.group(1, 2, 3))), int(match[4]) if match[4] else None
 
 
@@ -101,7 +101,7 @@ def write_metadata(plan, apk, output_dir):
         raise ValueError("Plan must be a JSON object")
     code = _version_code(plan.get("version_code"))
     _, beta = _version(plan.get("version_name"))
-    if "-release-beta" in plan["version_name"]:
+    if "-release-beta" in plan["version_name"] or "-debug" in plan["version_name"]:
         raise ValueError("Legacy preview plan version is not supported; replan and rebuild the APK with X.Y.Z-betaN")
     channel = plan.get("channel")
     if channel not in {"stable", "preview"} or (channel == "preview") != (beta is not None):
