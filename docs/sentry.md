@@ -10,11 +10,67 @@
 | organization / project | `app/build.gradle.kts` 的 `sentry { }` | `openahu` / `ahutong-android` |
 | 认证令牌 | 环境变量 `SENTRY_AUTH_TOKEN` | 仅构建期使用，不写入仓库 |
 
-## 需要提供的凭据
+## Release mapping 上传
 
-- `SENTRY_AUTH_TOKEN`：用于上传 Release 包的混淆映射，建议在 Sentry 的 Settings → Auth Tokens 中创建，作用域包含 `org:read` 与 `project:releases`。
-  未提供时构建正常进行，插件会跳过上传，Release 崩溃堆栈缺少符号化信息。
-- 自建 Sentry 时还需要服务端地址：`sentry { url.set("https://sentry.example.com") }`。
+根项目与 app 使用 `io.sentry.android.gradle:6.21.0`。JVM 插件不会注册 Android R8 mapping 任务。
+
+手动发布 CI 的自动 release/mapping 管理见 [CI 发布](ci.md)。普通自动构建不上传，手动发布在签名校验后单独上传一次。
+
+本地构建时如需由 Gradle 上传：
+
+1. 创建 Organization Token（`org:ci`），或可访问项目的 PAT（`project:releases` + `org:read`）。
+2. 将令牌安全配置为本地环境变量 `SENTRY_AUTH_TOKEN`，不要写入仓库。
+3. 执行 `./gradlew :app:assembleRelease`（Windows 使用 `gradlew.bat`）。有令牌时自动上传到
+   `openahu/ahutong-android`；无令牌时本项目明确关闭上传，但仍生成 mapping 和关联 UUID。
+4. 在 Sentry 项目 Settings → Debug Files 核对 UUID；安装这次 Release 构建并发送一条测试异常，
+   确认新事件带匹配的 ProGuard debug image，堆栈显示原始类名。
+
+可用 `./gradlew :app:tasks --all` 检查任务：
+
+| 用途 | 任务 / 产物 |
+| --- | --- |
+| 上传 | `:app:uploadSentryProguardMappingsRelease` |
+| 生成 UUID | `:app:generateSentryProguardUuidRelease` |
+| R8 mapping | `app/build/outputs/mapping/release/mapping.txt` |
+| UUID 文件 | `app/build/intermediates/sentry/release/proguard-uuid/sentry-proguard-uuid.properties` |
+| APK 中的 UUID | `assets/sentry-debug-meta.properties` 的 `io.sentry.ProguardUuids` |
+
+自动构建将无签名 Release APK、mapping 与 UUID 归档为 `AHUTong-ci-unsigned-release-with-mapping`；手动发布将实际签名 APK 与同次 mapping/UUID 归档为 `AHUTong-release-<run_id>-<run_attempt>`，流程见 [CI 发布](ci.md)。补传时必须保留这三者
+来自同一次构建；相同版本号重新构建的 mapping 不能替代原 mapping。
+
+### 已有 APK 补传
+
+从原 APK 读取 UUID，并使用原构建的 mapping：
+
+```bash
+unzip -p original.apk assets/sentry-debug-meta.properties
+# 安全配置 SENTRY_AUTH_TOKEN 后，填入上一步 io.sentry.ProguardUuids 的值。
+sentry-cli upload-proguard --org openahu --project ahutong-android \
+  --uuid ORIGINAL_APK_PROGUARD_UUID path/to/original/mapping.txt
+```
+
+插件 6.21.0 内置 CLI 3.7.0；该版本的 `--uuid` 虽标记 deprecated，但插件和旧 APK 补传仍使用它。
+旧 APK 若没有嵌入 UUID，单独上传 mapping 无法为其事件建立关联，可用原 mapping 离线 Retrace。
+补传后应验证新事件；不能保证已经处理的历史事件自动重新符号化。
+
+### Rust / native 崩溃
+
+R8 mapping 只能还原 Java/Kotlin。`sdk/Cargo.toml` 的 Release 配置目前会 strip，且未开启 debug info。
+要符号化 Rust，需要在后续构建保留同一次构建、含 DWARF 的未 strip `.so`，再执行：
+
+```bash
+sentry-cli debug-files check path/to/unstripped/libahutong_rs.so
+sentry-cli debug-files upload --org openahu --project ahutong-android \
+  --wait path/to/unstripped/
+```
+
+必须核对 Build ID，不能用重编后 Build ID 不同的 `.so` 补旧事件。
+
+### 查询 issue 的凭据
+
+构建上传令牌与读取 issue 的权限不同。查询 Issues / Events 需要 `event:read`，项目查询需要
+`project:read`，组织查询需要 `org:read`。配置本地安全环境变量或通过受支持的认证连接提供，
+不要把令牌贴入 issue、日志或聊天。自建 Sentry 另配置 `sentry { url.set("https://sentry.example.com") }`。
 
 ## 运行时行为
 
@@ -27,3 +83,20 @@
 
 1. `./gradlew :app:assembleDebug` 确认集成可通过编译。
 2. 安装 Debug 包后临时调用 `Sentry.captureException(new Exception("test"))`，确认 Sentry 项目中收到 `debug` 环境的事件。
+
+## 官方文档
+
+- [Android Gradle 插件](https://docs.sentry.io/platforms/android/configuration/gradle/)
+- [ProGuard / R8](https://docs.sentry.io/platforms/android/enhance-errors/proguard/)
+- [CLI 符号文件与 mapping](https://docs.sentry.io/cli/dif/)
+- [权限与 scope](https://docs.sentry.io/api/permissions/)
+
+## Native 崩溃线程信息
+
+应用启用现有 Sentry Android SDK 的 Tombstone integration。Android 12+ 在下次启动时读取系统 ApplicationExitInfo，可补充各线程、ART 和系统库符号，并与现有 NDK 事件合并；旧系统仍由 NDK 集成采集。未启用历史 Tombstone 回传或原始 protobuf 附件。
+
+这是后续诊断信息的补齐，不能视为已解决系统 libhwui/ART 崩溃。自有 native 库仍需上传与 APK 匹配的符号。
+
+参考：https://docs.sentry.io/platforms/android/configuration/tombstones/
+
+手动发布 CI 在独立步骤上传一次 mapping，并在服务器发布成功后自动 finalize release、记录 deploy。普通自动检查和构建保持空 Sentry token。不要同时开启 Gradle 真上传和发布步骤的 CLI 上传。
